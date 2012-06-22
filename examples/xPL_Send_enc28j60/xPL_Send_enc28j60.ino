@@ -26,14 +26,6 @@
 */
 
 #include <xPL.h>
-
-// *********************************************************************************************
-// ATTENTION ! The ethercard library needs to be modify to be able to send UDP Broadcast packet
-// In the tcpip.cpp file, just change line 317
-// From : if ((dip[0] & 0xF0) == 0xE0) // multicast address
-// To   : if ((dip[0] & 0xF0) == 0xE0 || dip[3] == 0xff) // multicast address
-// *********************************************************************************************
-
 #include <EtherCard.h>
 
 byte Ethernet::buffer[XPL_MESSAGE_BUFFER_MAX];
@@ -43,7 +35,10 @@ xPL xpl;
 uint8_t mymac[6] = { 0x54,0x55,0x58,0x10,0x00,0x11 };
 uint8_t myip[4] = { 192,168,0,133 };
 uint8_t gwip[4] = { 192,168,0,240};
-uint8_t broadcast[4] = { 192,168,0,255};
+
+// Ethercard seems to only send broadcast on this addr
+// find using xpl-perl, don't forget to add "--define broadcast=0.0.0.0" to the xpl-hub
+uint8_t broadcast[4] = { 255,255,255,255};
   
 unsigned long timer = 0;  
   
