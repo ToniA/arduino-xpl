@@ -37,7 +37,7 @@ uint8_t myip[4] = { 192,168,0,133 };
 uint8_t gwip[4] = { 192,168,0,240};
 
 // Ethercard seems to only send broadcast on this addr
-// find using xpl-perl, don't forget to add "--define broadcast=0.0.0.0" to the xpl-hub
+// if using xpl-perl, don't forget to add "--define broadcast=0.0.0.0" to the xpl-hub
 uint8_t broadcast[4] = { 255,255,255,255};
   
 unsigned long timer = 0;  
