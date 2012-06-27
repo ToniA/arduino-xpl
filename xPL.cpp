@@ -40,104 +40,163 @@
 #define XPL_SCHEMA_IDENTIFIER		        7
 #define XPL_OPEN_SCHEMA				8
 
-xPL_Message::xPL_Message()
+// Heartbeat request class definition
+//prog_char XPL_HBEAT_REQUEST_CLASS_ID[] PROGMEM = "hbeat";
+//prog_char XPL_HBEAT_REQUEST_TYPE_ID[] PROGMEM = "request";
+//prog_char XPL_HBEAT_ANSWER_CLASS_ID[] PROGMEM = "hbeat";
+//prog_char XPL_HBEAT_ANSWER_TYPE_ID[] PROGMEM = "basic";  //app, basic
+#define XPL_HBEAT_REQUEST_CLASS_ID  "hbeat"
+#define XPL_HBEAT_REQUEST_TYPE_ID  "request"
+#define XPL_HBEAT_ANSWER_CLASS_ID  "hbeat"
+#define XPL_HBEAT_ANSWER_TYPE_ID  "basic"
+
+/* xPL Class */
+xPL::xPL()
 {
-	command = NULL;
-	command_count = 0;
-    //ClearData();
+  udp_port = XPL_UDP_PORT;
+  
+  SendExternal = NULL;
+
+#ifdef ENABLE_PARSING
+  AfterParseAction = NULL;
+
+  last_heartbeat = 0;
+  hbeat_interval = XPL_DEFAULT_HEARTBEAT_INTERVAL;
+  xpl_accepted = XPL_ACCEPT_ALL;
+#endif
 }
 
-xPL_Message::~xPL_Message()
+xPL::~xPL()
 {
-	 if(command != NULL)
-	    	free(command);
 }
 
-/*void xPL_Message::ClearData()
+void xPL::Begin(char* vendorId, char* deviceId, char* instanceId)
 {
-    type = -1;
-    hop = -1;
-
-    clearStr(source.vendor_id);
-    clearStr(source.device_id);
-    clearStr(source.instance_id);
-    clearStr(target.vendor_id);
-    clearStr(target.device_id);
-    clearStr(target.instance_id);
-    clearStr(schema.class_id);
-    clearStr(schema.type_id);
-
-    if(command != NULL)
-    	free(command);
-
-    command = NULL;
-}*/
-
-void xPL_Message::AddCommand(char* _name, char* _value)
-{
-	command = (struct_command*)realloc ( command, (++command_count) * sizeof(struct_command) );
-
-	struct_command newcmd;
-	strcpy(newcmd.name, _name);
-	strcpy(newcmd.value, _value);
-
-	command[command_count-1] = newcmd;
+	strcpy(source.vendor_id, vendorId);
+	strcpy(source.device_id, deviceId);
+	strcpy(source.instance_id, instanceId);
 }
 
-void xPL_Message::AddCommand(char* _name, int _value)
+void xPL::SendMessage(char *buffer)
 {
-	char buffer[50];
-	sprintf(buffer,"%d",_value);
-	AddCommand(_name, buffer);
+  (*SendExternal)(buffer);
 }
 
-void xPL_Message::Parse(char *message, unsigned short len)
+void xPL::SendMessage(xPL_Message *message)
 {
-    int j=0;
-    int line=0;
+    SendMessage(message->toString());
+}
+
+#ifdef ENABLE_PARSING
+void xPL::Process()
+{
+	static bool bFirstRun = true;
+
+	// check heartbeat + send
+	if ((millis()-last_heartbeat >= (unsigned long)hbeat_interval * 60000)
+		  || (bFirstRun && millis() > 3000))
+	{
+		SendHBeat();
+		bFirstRun = false;
+	}
+}
+
+void xPL::ParseInputMessage(char* buffer)
+{
+	// check xpl_accepted
+	xPL_Message* xPLMessage = new xPL_Message();
+	Parse(xPLMessage, buffer);
+
+	// check if the message is an hbeat.request
+	if (CheckHBeatRequest(xPLMessage))
+	{
+		SendHBeat();
+	}
+
+	if(AfterParseAction != NULL)
+	{
+	  (*AfterParseAction)(xPLMessage);  // call user function to execute action under the class
+	}
+
+	delete xPLMessage;
+}
+
+bool xPL::TargetIsMe(xPL_Message * message)
+{
+  if (strcmp(message->target.vendor_id, source.vendor_id) != 0)
+    return false;
+
+  if (strcmp(message->target.device_id, source.device_id) != 0)
+    return false;
+
+  if (strcmp(message->target.instance_id, source.instance_id) != 0)
+    return false;
+
+  return true;
+}
+
+void xPL::SendHBeat()
+{
+  last_heartbeat = millis();
+  char buffer[XPL_MESSAGE_BUFFER_MAX];
+
+  sprintf(buffer, "xpl-stat\n{\nhop=1\nsource=%s-%s.%s\ntarget=*\n}\n%s.%s\n{\ninterval=%d\n}\n", source.vendor_id, source.device_id, source.instance_id, XPL_HBEAT_ANSWER_CLASS_ID, XPL_HBEAT_ANSWER_TYPE_ID, hbeat_interval);
+
+  (*SendExternal)(buffer);
+}
+
+bool xPL::CheckHBeatRequest(xPL_Message* xPLMessage)
+{
+  if (!TargetIsMe(xPLMessage))
+    return false;
+
+  if (strcmp_P(xPLMessage->schema.class_id, XPL_HBEAT_REQUEST_CLASS_ID) != 0)
+    return false;
+
+  if (strcmp_P(xPLMessage->schema.type_id, XPL_HBEAT_REQUEST_TYPE_ID) != 0)
+    return false;
+
+  return true;
+}
+
+void xPL::Parse(xPL_Message* xPLMessage, char* message)
+{
+    int len = strlen(message);
+
+    byte j=0;
+    byte line=0;
     int result=0;
     char buffer[XPL_LINE_MESSAGE_BUFFER_MAX] = "\0";
 
-    //ClearData();
-
     // read each character of the message
-    for(int i=0; i<len; i++)
+    for(byte i=0; i<len; i++)
     {
         // load byte by byte in 'line' buffer, until '\n' is detected
         if(message[i]==XPL_END_OF_LINE) // is it a linefeed (ASCII: 10 decimal)
         {
-            line++;
+            ++line;
             buffer[j]='\0';	// add the end of string id
 
             if(line<=XPL_OPEN_SCHEMA)
             {
                 // first part: header and schema determination
-                result=AnalyseHeaderLine(buffer, line); // we analyse the line, function of the line number inthe xpl message
+                result=AnalyseHeaderLine(xPLMessage, buffer ,line); // we analyse the line, function of the line number inthe xpl message
             };
 
             if(line>XPL_OPEN_SCHEMA)
             {
                 // second part: command line
-                result=AnalyseCommandLine(buffer, line-9); // we analyse the specific command line, function of the line number in the xpl message
+                result=AnalyseCommandLine(xPLMessage, buffer, line-9); // we analyse the specific command line, function of the line number in the xpl message
 
-                if(result==command_count+1)
+                if(result==xPLMessage->command_count+1)
                 {
-                    //Serial.print(millis());
-                    //Serial.println(" - Data analyse finished");
                     break;
                 };
 
             };
 
-            if (result<0)
+            if (result < 0)
             {
-                // if the analyse of the line return and error
-                //ClearData();
-                //Serial.print(millis());
-                //Serial.print(" - xPL message traitment stopped at line ");
-                //Serial.print(line);
-                //Serial.print(" error code ");
-                //Serial.print(result);
                 break;
             };
 
@@ -152,85 +211,31 @@ void xPL_Message::Parse(char *message, unsigned short len)
     }
 }
 
-char *xPL_Message::toString()
+byte xPL::AnalyseHeaderLine(xPL_Message* xPLMessage, char* buffer, byte line)
 {
-  char message_buffer[XPL_MESSAGE_BUFFER_MAX];
-
-  char message_type[9];
-  clearStr(message_buffer);
-  
-  switch(type)
-  {
-    case (XPL_CMND):
-      sprintf(message_type, "xpl-cmnd");
-      break;
-    case (XPL_STAT):
-      sprintf(message_type, "xpl-stat");
-      break;
-    case (XPL_TRIG):
-      sprintf(message_type, "xpl-trig");
-      break;
-  }  
-
-  // correction &hop dans le sprintf
-  if(memcmp(target.vendor_id,"*", 1) == 0)  // check if broadcast message
-  {
-    sprintf(message_buffer, "%s\n{\nhop=1\nsource=%s-%s.%s\ntarget=%s\n}\n%s.%s\n{\n", message_type, source.vendor_id, source.device_id, source.instance_id, "*", schema.class_id, schema.type_id);
-  }
-  else
-  {
-    sprintf(message_buffer, "%s\n{\nhop=1\nsource=%s-%s.%s\ntarget=%s-%s.%s\n}\n%s.%s\n{\n", message_type, source.vendor_id, source.device_id, source.instance_id, target.vendor_id, target.device_id, target.instance_id, schema.class_id, schema.type_id);    
-  }
-  
-  for (int i=0; i<command_count; i++)
-  {
-    strcat(message_buffer, command[i].name);
-    strcat(message_buffer, "=");
-    strcat(message_buffer, command[i].value);
-    strcat(message_buffer, "\n"); 
-  }
-  
-  strcat(message_buffer, "}\n");
-  
-  return message_buffer;
-}
-
-bool xPL_Message::IsSchema(char *class_id, char *type_id)
-{
-  if (strcmp(schema.class_id, class_id) == 0)
-  {
-    if (strcmp(schema.type_id, type_id) == 0)
-    {
-      return true;
-    }   
-  }  
-
-  return false;
-}
-
-int xPL_Message::AnalyseHeaderLine(char *buffer, int line)
-{
-
     switch (line)
     {
 
     case XPL_MESSAGE_TYPE_IDENTIFIER: //message type identifier
 
-        if (memcmp(buffer,"xpl-cmnd",8)==0) //type commande
-        {
-            type=XPL_CMND;  //xpl-cmnd
-        }
-        else if (memcmp(buffer,"xpl-stat",8)==0) //type statut
-        {
-            type=XPL_STAT;  //xpl-stat
-        }
-        else if (memcmp(buffer,"xpl-trig",8)==0) //type trigger
-        {
-            type=XPL_TRIG;  //xpl-trig
-        }
+		if (memcmp(buffer,"xpl-",4)==0) //xpl
+		{
+			if (memcmp(buffer+4,"cmnd",4)==0) //type commande
+			{
+				xPLMessage->type=XPL_CMND;  //xpl-cmnd
+			}
+			else if (memcmp(buffer+4,"stat",4)==0) //type statut
+			{
+				xPLMessage->type=XPL_STAT;  //xpl-stat
+			}
+			else if (memcmp(buffer+4,"trig",4)==0) //type trigger
+			{
+				xPLMessage->type=XPL_TRIG;  //xpl-trig
+			}
+		}
         else
         {
-            return -1;  //unknown message
+            return 0;  //unknown message
         }
         return 1;
         break;
@@ -242,97 +247,68 @@ int xPL_Message::AnalyseHeaderLine(char *buffer, int line)
             return 2;
         }
         else
-        {
-            return -2;
-        }
+                {
+                    return -2;
+                }
         break;
 
     case XPL_HOP_COUNT: //hop
-        if (sscanf(buffer, "hop=%d", &hop))
+        if (sscanf(buffer, "hop=%d", &xPLMessage->hop))
         {
             return 3;
         }
         else
-        {
-            return -3;
-        }
+                {
+                    return -3;
+                }
         break;
 
     case XPL_SOURCE: //source
-        if (sscanf(buffer, "source=%[^-]-%[^'.'].%s", &source.vendor_id, &source.device_id, &source.instance_id) == 3)
+        if (sscanf(buffer, "source=%[^-]-%[^'.'].%s", &xPLMessage->source.vendor_id, &xPLMessage->source.device_id, &xPLMessage->source.instance_id) == 3)
         {
           return 4;
         }
         else
-        {
-          return -4;
-        }
+                {
+                  return -4;
+                }
         break;
 
     case XPL_TARGET: //target
 
-        if (sscanf(buffer, "target=%[^-]-%[^'.'].%s", &target.vendor_id, &target.device_id, &target.instance_id) == 3)        
+        if (sscanf(buffer, "target=%[^-]-%[^'.'].%s", &xPLMessage->target.vendor_id, &xPLMessage->target.device_id, &xPLMessage->target.instance_id) == 3)
         {
-          return 5;  
+          return 5;
         }
         else
         {
-          if(memcmp(target.vendor_id,"*", 1) == 0)  // check if broadcast message
+          if(memcmp(xPLMessage->target.vendor_id,"*", 1) == 0)  // check if broadcast message
           {
             return 5;
-          }  
+          }
           else
           {
-            return -5; 
+        	  return -5;
           }
         }
-
-        /*if(!strcmp(this.target.vendor_id,"*"))
-        {
-            Serial.print(millis());
-            Serial.println(" --> broadcast message");
-            return 5;
-        }
-        else if(!strcmp(this.target.vendor_id, vendor_id) && !strcmp(this.target.instance_id, instance_id)) // check if it's the good vendor and instance id
-        {
-            Serial.print(millis());
-            Serial.println(" --> this target message");
-            return 5;
-        }
-        else
-        {
-            Serial.print(millis());
-            Serial.println(" --> other target message");
-            return -5;
-        }*/
-
-        return 5;
         break;
 
     case XPL_CLOSE_HEADER: //header end
         if (memcmp(buffer,"}",1)==0)
         {
-            // Serial.print(" -> Header end");
             return 6;
         }
         else
-        {
-            // Serial.print(" -> Header end not found");
-            return -6;
-        }
-
+                {
+                    // Serial.print(" -> Header end not found");
+                    return -6;
+                }
         break;
 
     case XPL_SCHEMA_IDENTIFIER: //schema
 
         // xpl_header.schema=parse_schema_id(buffer);
-        sscanf(buffer, "%[^'.'].%s", &schema.class_id, &schema.type_id);
-
-        // Serial.println();
-        // Serial.print("   |-> schema class id -> ");
-        // Serial.println(xpl_header.schema.class_id);
-        // Serial.print("   |-> schema type id -> ");
-        // Serial.println(xpl_header.schema.type_id);
+        sscanf(buffer, "%[^'.'].%s", &xPLMessage->schema.class_id, &xPLMessage->schema.type_id);
         return 7;
 
         break;
@@ -340,179 +316,33 @@ int xPL_Message::AnalyseHeaderLine(char *buffer, int line)
     case XPL_OPEN_SCHEMA: //header begin
         if (memcmp(buffer,"{",1)==0)
         {
-            // Serial.print(" -> Header begin");
             return 8;
         }
         else
-        {
-            // Serial.print(" -> Header begin not found");
-            return -8;
-        }
+                {
+                    // Serial.print(" -> Header begin not found");
+                    return -8;
+                }
         break;
     }
 
     return -100;
 }
 
-int xPL_Message::AnalyseCommandLine(char *buffer, int command_line)
+byte xPL::AnalyseCommandLine(xPL_Message * xPLMessage,char *buffer, byte command_line)
 {
     if (memcmp(buffer,"}",1)==0) // End of schema
     {
-        return command_count+1;
+        return xPLMessage->command_count+1;
     }
     else	// parse the next command
     {
     	struct_command newcmd;
         sscanf(buffer, "%[^'=']=%s", &newcmd.name, &newcmd.value);
-        //command_count++;
 
-        AddCommand(newcmd.name, newcmd.value);
+        xPLMessage->AddCommand(newcmd.name, newcmd.value);
 
         return command_line;
     }
 }
-
-
-/* xPL Class */
-xPL::xPL()
-{
-  hbeat_interval = XPL_DEFAULT_HEARTBEAT_INTERVAL;
-  udp_port = XPL_UDP_PORT;
-  xpl_accepted = XPL_ACCEPT_ALL;
-  
-  //ClearData();
-  
-  last_heartbeat = 0;
-}
-
-void xPL::Begin(char *vendorid, char *deviceid, char *instanceid)
-{
-  strcpy(source.vendor_id, vendorid);
-  strcpy(source.device_id, deviceid);
-  strcpy(source.instance_id, instanceid);    
-}
-
-void xPL::Process()
-{
-	static bool bFirstRun = true;
-
-  //clearStr(xPLMessageBuff);
-
-  // check heartbeat + send
-  if ((millis()-last_heartbeat >= (unsigned long)hbeat_interval * 60000)
-		  || (bFirstRun && millis() > 3000))
-  {
-    SendHBeat();
-    bFirstRun = false;
-  }
-}
-
-/*void xPL::ClearData()
-{
-  clearStr(source.vendor_id);
-  clearStr(source.device_id);
-  clearStr(source.instance_id);
-}*/
-
-void xPL::ParseInputMessage(char* buffer)
-{
-  // check xpl_accepted
-  xPL_Message *message = new xPL_Message();
-  message->Parse(buffer, strlen(buffer));
-    
-  // check if the message is an hbeat.request
-  if (CheckHBeatRequest(message) == 1)
-  {    
-    SendHBeat(); 
-  }
-  
-  if(AfterParseAction != NULL)
-	  (*AfterParseAction)(message);  // call user function to execute action under the class
-
-  delete message;
-}
-
-void xPL::SendMessage(char *buffer)
-{
-  (*SendExternal)(buffer, strlen(buffer));
-}
-
-void xPL::SendMessage(xPL_Message *message)
-{
-    SendMessage(message->toString());
-}
-
-bool xPL::TargetIsMe(xPL_Message * message)
-{
-  if (strcmp(message->target.vendor_id, source.vendor_id) != 0)
-    return false;
-  
-  if (strcmp(message->target.device_id, source.device_id) != 0)
-    return false;
-  
-  if (strcmp(message->target.instance_id, source.instance_id) != 0)
-    return false;
-    
-    // no check command=request
-  
-  return true;
-}
-
-void xPL::SetSourceVendorId(char *vendorid)
-{
-  strncpy(source.vendor_id, vendorid, XPL_VENDOR_ID_MAX);  
-  source.vendor_id[XPL_VENDOR_ID_MAX+1] = '\0';
-}
-
-void xPL::SetSourceDeviceId(char *deviceid)
-{
-  strncpy(source.device_id, deviceid, XPL_DEVICE_ID_MAX);
-  source.device_id[XPL_DEVICE_ID_MAX+1] = '\0';
-}
-
-void xPL::SetSourceInstanceId(char *instanceid)
-{
-  strncpy(source.instance_id, instanceid, XPL_INSTANCE_ID_MAX); 
-  source.instance_id[XPL_INSTANCE_ID_MAX+1] = '\0';
-}
-
-void xPL::SetHBeatInterval(unsigned short interval)
-{
-  hbeat_interval = interval; 
-}
-
-void xPL::SetUdpPort(unsigned short udpport)
-{
-  udp_port = udpport; 
-}
-
-void xPL::SendHBeat()
-{
-  last_heartbeat = millis();
-  char buffer[XPL_MESSAGE_BUFFER_MAX];
-  
-  //if (memcmp(xPLMessage.target.vendor_id, "*", 1) == 0)
-  //{
-    sprintf(buffer, "xpl-stat\n{\nhop=1\nsource=%s-%s.%s\ntarget=*\n}\n%s.%s\n{\ninterval=%d\n}\n", source.vendor_id, source.device_id, source.instance_id, XPL_HBEAT_ANSWER_CLASS_ID, XPL_HBEAT_ANSWER_TYPE_ID, hbeat_interval); 
-  /*}
-  else
-  {
-    sprintf(buffer, "xpl-stat\n{\nhop=1\nsource=%s-%s.%s\ntarget=%s-%s.%s\n}\n%s.%s\n{\ninterval=%d\n}\n", source.vendor_id, source.device_id, source.instance_id, xPLMessage.source.vendor_id, xPLMessage.source.device_id, xPLMessage.source.instance_id, XPL_HBEAT_ANSWER_CLASS_ID, XPL_HBEAT_ANSWER_TYPE_ID, hbeat_interval);
-  }*/
-   
-  (*SendExternal)(buffer, strlen(buffer));  //call user function to send datas
-}
-
-bool xPL::CheckHBeatRequest(xPL_Message * message)
-{  
-  if (TargetIsMe(message) == 0)
-    return false;
-
-  if (strcmp(message->schema.class_id, XPL_HBEAT_REQUEST_CLASS_ID) != 0)
-    return false;
-    
-  if (strcmp(message->schema.type_id, XPL_HBEAT_REQUEST_TYPE_ID) != 0)
-    return false;
-     
-  return true;
-}
+#endif

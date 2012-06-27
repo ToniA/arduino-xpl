@@ -28,10 +28,9 @@
 #include <SPI.h>        
 #include <Ethernet.h>
 #include <EthernetUdp.h>
-//#include <string.h>
+
 #include "xPL.h"
 
-char xPLMessageBuff[XPL_MESSAGE_BUFFER_MAX];
 xPL xpl;
 
 // Enter a MAC address and IP address for your controller below.
@@ -41,7 +40,7 @@ IPAddress ip(10, 0, 0, 177);
 IPAddress broadcast(10, 0, 0, 255);
 EthernetUDP Udp;
 
-void SendUdPMessage(char *buffer, int len)
+void SendUdPMessage(char *buffer)
 {
     Udp.beginPacket(broadcast, xpl.udp_port);
     Udp.write(buffer);
@@ -71,7 +70,6 @@ void setup()
   xpl.SendExternal = &SendUdPMessage;  // pointer to the send callback
   xpl.AfterParseAction = &AfterParseAction;  // pointer to a post parsing action callback 
   xpl.Begin("xpl", "arduino", "test"); // parameters for hearbeat message
-  xpl.hbeat_interval = 5; // interval of heartbeat message
 }
 
 void loop()

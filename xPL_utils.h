@@ -28,6 +28,7 @@
 #ifndef xPLutil_h
 #define xPLutil_h
 
+#include "Arduino.h"
 #include <string.h>
 
 #define XPL_VENDOR_ID_MAX 8

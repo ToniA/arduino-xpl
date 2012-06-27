@@ -31,7 +31,7 @@
 void clearStr (char* str)
 {
     int len = strlen(str);
-    for (int c = 0; c < len; c++)
+    for (byte c = 0; c < len; c++)
     {
         str[c] = 0;
     }

@@ -25,73 +25,38 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef xPL_h
-#define xPL_h
+#ifndef xPLMessage_h
+#define xPLMessage_h
  
-#define ENABLE_PARSING 1
-
 #include "Arduino.h"
 #include "xPL_utils.h"
-#include "xPL_Message.h"
 
 #define XPL_CMND 1
 #define XPL_STAT 2
 #define XPL_TRIG 3
 
-#define XPL_DEFAULT_HEARTBEAT_INTERVAL   5
+#define XPL_MESSAGE_BUFFER_MAX           256
 
-#define XPL_UDP_PORT 3865
-
-#define XPL_PORT_L  0x19
-#define XPL_PORT_H  0xF
-
-typedef enum {XPL_ACCEPT_ALL, XPL_ACCEPT_SELF, XPL_ACCEPT_SELF_ANY} xpl_accepted_type;
-// XPL_ACCEPT_ALL = all xpl messages
-// XPL_ACCEPT_SELF = only for me
-// XPL_ACCEPT_SELF_ANY = only for me and any (*)
-
-typedef void (*xPLSendExternal)(char*);
-typedef void (*xPLAfterParseAction)(xPL_Message * message);
-
-class xPL
+class xPL_Message
 {
-  public:
-	xPL();
-	~xPL();
+    public:
+        short type;			        // 1=cmnd, 2=stat, 3=trig
+        short hop;				// Hop count
+        struct_id source;			// source identification
+        struct_id target;			// target identification
 
-	struct_id source;  // my source
-	unsigned short udp_port;    // default 3865
+        struct_xpl_schema schema;
+        struct_command *command;
+        byte command_count;
 
-	xPLSendExternal SendExternal;
+        void AddCommand(char*, char*);
+        
+        xPL_Message();
+        ~xPL_Message();
 
-	void SendMessage(char *);
-	void SendMessage(xPL_Message *);
-
-	void Begin(char*,char*,char*);  // define my source
-
-#ifdef ENABLE_PARSING
-	xPLAfterParseAction AfterParseAction;
-
-
-    byte hbeat_interval;  // default 5
-    xpl_accepted_type xpl_accepted;
-
-
-    void Process();
-    void ParseInputMessage(char *buffer);
-
-    bool TargetIsMe(xPL_Message * message);
-
-  private:
-    //void ClearData();
-    unsigned long last_heartbeat;
-    void SendHBeat();
-    bool CheckHBeatRequest(xPL_Message * message);
-
-	void Parse(xPL_Message *, char *);
-	byte AnalyseHeaderLine(xPL_Message *, char *, byte );
-    byte AnalyseCommandLine(xPL_Message *, char *, byte );
-#endif
+        char *toString();
+        
+        bool IsSchema(char*, char*);
 };
 
 #endif

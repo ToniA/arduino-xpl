@@ -37,17 +37,17 @@ uint8_t myip[4] = { 192,168,0,133 };
 uint8_t gwip[4] = { 192,168,0,240};
 
 // Ethercard seems to only send broadcast on this addr
-// if using xpl-perl, don't forget to add "--define broadcast=0.0.0.0" to the xpl-hub
+// find using xpl-perl, don't forget to add "--define broadcast=0.0.0.0" to the xpl-hub
 uint8_t broadcast[4] = { 255,255,255,255};
   
-void SendUdPMessage(char *buffer, int len)
+void SendUdPMessage(char *buffer)
 {
-    ether.sendUdp (buffer, len, xpl.udp_port, broadcast, xpl.udp_port);
+    ether.sendUdp (buffer, strlen(buffer), xpl.udp_port, broadcast, xpl.udp_port);
 }
 
 void AfterParseAction(xPL_Message * message)
 {
-	if (xpl.TargetIsMe(message))
+    if (xpl.TargetIsMe(message))
     {
       if (message->IsSchema("lighting", "basic"))
       {
@@ -63,19 +63,12 @@ void setup()
 {
   Serial.begin(115200);
       
-  if (ether.begin(sizeof Ethernet::buffer, mymac) == 0)
-  {
-    Serial.println( "Failed to access Ethernet controller");
-  }
-
+  ether.begin(sizeof Ethernet::buffer, mymac);
   ether.staticSetup(myip, gwip);
 
-  Serial.println("Ethernet controller ready"); 
-  
   xpl.SendExternal = &SendUdPMessage;  // pointer to the send callback
   xpl.AfterParseAction = &AfterParseAction;  // pointer to a post parsing action callback 
   xpl.Begin("xpl", "arduino", "test"); // parameters for hearbeat message
-  xpl.hbeat_interval = 5; // interval of heartbeat message
 }
 
 void loop()
