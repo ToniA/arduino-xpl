@@ -51,7 +51,8 @@ class xPL_Message
         struct_command *command;
         byte command_count;
 
-        bool AddCommand(char*, char*);
+        bool AddCommand(const PROGMEM char *,const PROGMEM char *);
+		bool AddCommand(char*, char*);
         
         xPL_Message();
         ~xPL_Message();
@@ -62,7 +63,14 @@ class xPL_Message
 	
 	    void SetSource(char *,char *,char *);  // define my source
 		void SetTarget(const PROGMEM char *,const PROGMEM char * = NULL,const PROGMEM char * = NULL);
-
+		void SetSchema(const PROGMEM char *,const PROGMEM char *);
+			
+		
+	private:
+		void SetCommand(struct_command* , const PROGMEM char * , const PROGMEM char * );
+		void SetCommand(struct_command* , char * , char * );
+		
+		bool CreateCommand();
 };
 
 #endif

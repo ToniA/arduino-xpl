@@ -155,13 +155,7 @@ bool xPL::CheckHBeatRequest(xPL_Message* xPLMessage)
   if (!TargetIsMe(xPLMessage))
     return false;
 
-  if (memcmp(xPLMessage->schema.class_id, XPL_HBEAT_REQUEST_CLASS_ID, 5) != 0)
-    return false;
-
-  if (memcmp(xPLMessage->schema.type_id, XPL_HBEAT_REQUEST_TYPE_ID, 7) != 0)
-    return false;
-
-  return true;
+  return xPLMessage->IsSchema(XPL_HBEAT_REQUEST_CLASS_ID, XPL_HBEAT_REQUEST_TYPE_ID);
 }
 
 void xPL::Parse(xPL_Message* xPLMessage, char* message)
