@@ -56,7 +56,7 @@ void setup()
   Udp.begin(xpl.udp_port);  
   
   xpl.SendExternal = &SendUdPMessage;  // pointer to the send callback 
-  xpl.Begin("xpl", "arduino", "test"); // parameters for hearbeat message
+  xpl.Begin(PSTR("xpl"), PSTR("arduino"), PSTR("test")); // parameters for hearbeat message
 }
 
 void loop()
@@ -71,16 +71,16 @@ void loop()
      msg.hop = 1;
      msg.type = XPL_TRIG;
 
-     strcpy(msg.source.vendor_id, xpl.source.vendor_id);
-     strcpy(msg.source.device_id, xpl.source.device_id);
-     strcpy(msg.source.instance_id, xpl.source.instance_id);
+     //memcpy(msg.source.vendor_id, xpl.source.vendor_id, XPL_VENDOR_ID_MAX);
+     //memcpy(msg.source.device_id, xpl.source.device_id, XPL_DEVICE_ID_MAX);
+     //memcpy(msg.source.instance_id, xpl.source.instance_id, XPL_INSTANCE_ID_MAX);
 
-     strcpy(msg.target.vendor_id, "*");
-     //strcpy(msg.target.device_id, "xxx");
-     //strcpy(msg.target.instance_id, "xxx");
+     memcpy(msg.target.vendor_id, "*", 1);
+     //memcpy(msg.target.device_id, "xxx", 3);
+     //memcpy(msg.target.instance_id, "xxx", 3);
 
-     strcpy(msg.schema.class_id, "sensor");
-     strcpy(msg.schema.type_id, "basic");
+     memcpy(msg.schema.class_id, "sensor", 6);
+     memcpy(msg.schema.type_id, "basic", 5);
 
      msg.AddCommand("device","1");
      msg.AddCommand("type","temp");

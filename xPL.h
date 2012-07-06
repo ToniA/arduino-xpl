@@ -65,9 +65,9 @@ class xPL
 	xPLSendExternal SendExternal;
 
 	void SendMessage(char *);
-	void SendMessage(xPL_Message *);
+	void SendMessage(xPL_Message *, bool = true);
 
-	void Begin(char*,char*,char*);  // define my source
+	void Begin(const PROGMEM char *,const PROGMEM char *,const PROGMEM char *);  // define my source
 
 #ifdef ENABLE_PARSING
 	xPLAfterParseAction AfterParseAction;

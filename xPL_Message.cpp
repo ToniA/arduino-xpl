@@ -41,15 +41,37 @@ xPL_Message::~xPL_Message()
 	}
 }
 
-void xPL_Message::AddCommand(char* _name, char* _value)
+void xPL_Message::SetSource(char * _vendorId, char * _deviceId, char * _instanceId)
 {
+	memcpy(source.vendor_id, _vendorId, XPL_VENDOR_ID_MAX);
+	memcpy(source.device_id, _deviceId, XPL_DEVICE_ID_MAX);
+	memcpy(source.instance_id, _instanceId, XPL_INSTANCE_ID_MAX);
+}
+
+void xPL::SetTarget(const PROGMEM char * _vendorId, const PROGMEM char * _deviceId, const PROGMEM char * _instanceId)
+{
+	memcpy_P(target.vendor_id, _vendorId, XPL_VENDOR_ID_MAX);
+	if(_deviceId != NULL) memcpy_P(target.device_id, _deviceId, XPL_DEVICE_ID_MAX);
+	if(_instanceId != NULL) memcpy_P(target.instance_id, _instanceId, XPL_INSTANCE_ID_MAX);
+}
+
+
+bool xPL_Message::AddCommand(char* _name, char* _value)
+{
+	// Maximun command reach
+	// To avoid oom, we arbitrary accept only XPL_MESSAGE_COMMAND_MAX command
+	if(command_count > XPL_MESSAGE_COMMAND_MAX)
+		return false;
+		
 	command = (struct_command*)realloc ( command, (++command_count) * sizeof(struct_command) );
 
 	struct_command newcmd;
-	strcpy(newcmd.name, _name);
-	strcpy(newcmd.value, _value);
+	memcpy(newcmd.name, _name, 16);
+	memcpy(newcmd.value, _value, 128);
 
 	command[command_count-1] = newcmd;
+	
+	return true;
 }
 
 char *xPL_Message::toString()
@@ -62,35 +84,35 @@ char *xPL_Message::toString()
   switch(type)
   {
     case (XPL_CMND):
-      pos = sprintf(message_buffer, "xpl-cmnd");
+      pos = sprintf_P(message_buffer, PSTR("xpl-cmnd"));
       break;
     case (XPL_STAT):
-      pos = sprintf(message_buffer, "xpl-stat");
+      pos = sprintf_P(message_buffer, PSTR("xpl-stat"));
       break;
     case (XPL_TRIG):
-      pos = sprintf(message_buffer, "xpl-trig");
+      pos = sprintf_P(message_buffer, PSTR("xpl-trig"));
       break;
   }
 
-  pos += sprintf(message_buffer + pos, "\n{\nhop=1\nsource=%s-%s.%s\ntarget=", source.vendor_id, source.device_id, source.instance_id);
+  pos += sprintf_P(message_buffer + pos, PSTR("\n{\nhop=1\nsource=%s-%s.%s\ntarget="), source.vendor_id, source.device_id, source.instance_id);
 
   if(memcmp(target.vendor_id,"*", 1) == 0)  // check if broadcast message
   {
-    pos += sprintf(message_buffer + pos,"*\n}\n");
+    pos += sprintf_P(message_buffer + pos, PSTR("*\n}\n"));
   }
   else
   {
-	pos += sprintf(message_buffer + pos,"%s-%s.%s\n}\n",target.vendor_id, target.device_id, target.instance_id);
+	pos += sprintf_P(message_buffer + pos, PSTR("%s-%s.%s\n}\n"),target.vendor_id, target.device_id, target.instance_id);
   }
 
-  pos += sprintf(message_buffer + pos,"%s.%s\n{\n",schema.class_id, schema.type_id);
+  pos += sprintf_P(message_buffer + pos, PSTR("%s.%s\n{\n"),schema.class_id, schema.type_id);
 
   for (byte i=0; i<command_count; i++)
   {
-	pos += sprintf(message_buffer + pos,"%s=%s\n", command[i].name, command[i].value);
+	pos += sprintf_P(message_buffer + pos, PSTR("%s=%s\n"), command[i].name, command[i].value);
   }
 
-  sprintf(message_buffer + pos, "}\n");
+  sprintf_P(message_buffer + pos, PSTR("}\n"));
 
   return message_buffer;
 }
@@ -100,9 +122,9 @@ bool xPL_Message::IsSchema(char* _classId, char* _typeId)
 //  const char *classId = (const char PROGMEM *)_classId;
 //  const char *typeId = (const char PROGMEM *)_typeId;
 
-  if (strcmp(schema.class_id, _classId) == 0)
+  if (memcmp(schema.class_id, _classId, 8) == 0)
   {
-    if (strcmp(schema.type_id, _typeId) == 0)
+    if (memcmp(schema.type_id, _typeId, 8) == 0)
     {
       return true;
     }   

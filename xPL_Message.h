@@ -36,20 +36,22 @@
 #define XPL_TRIG 3
 
 #define XPL_MESSAGE_BUFFER_MAX           256
+#define XPL_MESSAGE_COMMAND_MAX          10
 
 class xPL_Message
 {
     public:
         short type;			        // 1=cmnd, 2=stat, 3=trig
         short hop;				// Hop count
-        struct_id source;			// source identification
+        
+		struct_id source;			// source identification
         struct_id target;			// target identification
 
         struct_xpl_schema schema;
         struct_command *command;
         byte command_count;
 
-        void AddCommand(char*, char*);
+        bool AddCommand(char*, char*);
         
         xPL_Message();
         ~xPL_Message();
@@ -57,6 +59,10 @@ class xPL_Message
         char *toString();
         
         bool IsSchema(char*, char*);
+	
+	    void SetSource(char *,char *,char *);  // define my source
+		void SetTarget(const PROGMEM char *,const PROGMEM char * = NULL,const PROGMEM char * = NULL);
+
 };
 
 #endif

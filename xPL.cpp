@@ -70,20 +70,25 @@ xPL::~xPL()
 {
 }
 
-void xPL::Begin(char* vendorId, char* deviceId, char* instanceId)
+void xPL::Begin(const PROGMEM char * _vendorId, const PROGMEM char * _deviceId, const PROGMEM char * _instanceId)
 {
-	strcpy(source.vendor_id, vendorId);
-	strcpy(source.device_id, deviceId);
-	strcpy(source.instance_id, instanceId);
+	memcpy_P(source.vendor_id, _vendorId, XPL_VENDOR_ID_MAX);
+	memcpy_P(source.device_id, _deviceId, XPL_DEVICE_ID_MAX);
+	memcpy_P(source.instance_id, _instanceId, XPL_INSTANCE_ID_MAX);
 }
 
 void xPL::SendMessage(char *buffer)
 {
-  (*SendExternal)(buffer);
+	(*SendExternal)(buffer);
 }
 
-void xPL::SendMessage(xPL_Message *message)
+void xPL::SendMessage(xPL_Message *message, bool _useDefaultSource)
 {
+	if(_useDefaultSource)
+	{
+		message->SetSource(source.vendor_id, source.device_id, source.instance_id);
+	}
+	
     SendMessage(message->toString());
 }
 
@@ -92,7 +97,7 @@ void xPL::Process()
 {
 	static bool bFirstRun = true;
 
-	// check heartbeat + send
+	// Check heartbeat + send
 	if ((millis()-last_heartbeat >= (unsigned long)hbeat_interval * 60000)
 		  || (bFirstRun && millis() > 3000))
 	{
@@ -103,7 +108,6 @@ void xPL::Process()
 
 void xPL::ParseInputMessage(char* buffer)
 {
-	// check xpl_accepted
 	xPL_Message* xPLMessage = new xPL_Message();
 	Parse(xPLMessage, buffer);
 
@@ -123,13 +127,13 @@ void xPL::ParseInputMessage(char* buffer)
 
 bool xPL::TargetIsMe(xPL_Message * message)
 {
-  if (strcmp(message->target.vendor_id, source.vendor_id) != 0)
+  if (memcmp(message->target.vendor_id, source.vendor_id, XPL_VENDOR_ID_MAX) != 0)
     return false;
 
-  if (strcmp(message->target.device_id, source.device_id) != 0)
+  if (memcmp(message->target.device_id, source.device_id, XPL_DEVICE_ID_MAX) != 0)
     return false;
 
-  if (strcmp(message->target.instance_id, source.instance_id) != 0)
+  if (memcmp(message->target.instance_id, source.instance_id, XPL_INSTANCE_ID_MAX) != 0)
     return false;
 
   return true;
@@ -140,9 +144,10 @@ void xPL::SendHBeat()
   last_heartbeat = millis();
   char buffer[XPL_MESSAGE_BUFFER_MAX];
 
-  sprintf(buffer, "xpl-stat\n{\nhop=1\nsource=%s-%s.%s\ntarget=*\n}\n%s.%s\n{\ninterval=%d\n}\n", source.vendor_id, source.device_id, source.instance_id, XPL_HBEAT_ANSWER_CLASS_ID, XPL_HBEAT_ANSWER_TYPE_ID, hbeat_interval);
+  sprintf_P(buffer, PSTR("xpl-stat\n{\nhop=1\nsource=%s-%s.%s\ntarget=*\n}\n%s.%s\n{\ninterval=%d\n}\n"), source.vendor_id, source.device_id, source.instance_id, XPL_HBEAT_ANSWER_CLASS_ID, XPL_HBEAT_ANSWER_TYPE_ID, hbeat_interval);
 
-  (*SendExternal)(buffer);
+  //(*SendExternal)(buffer);
+  SendMessage(buffer);
 }
 
 bool xPL::CheckHBeatRequest(xPL_Message* xPLMessage)
@@ -150,10 +155,10 @@ bool xPL::CheckHBeatRequest(xPL_Message* xPLMessage)
   if (!TargetIsMe(xPLMessage))
     return false;
 
-  if (strcmp_P(xPLMessage->schema.class_id, XPL_HBEAT_REQUEST_CLASS_ID) != 0)
+  if (memcmp(xPLMessage->schema.class_id, XPL_HBEAT_REQUEST_CLASS_ID, 5) != 0)
     return false;
 
-  if (strcmp_P(xPLMessage->schema.type_id, XPL_HBEAT_REQUEST_TYPE_ID) != 0)
+  if (memcmp(xPLMessage->schema.type_id, XPL_HBEAT_REQUEST_TYPE_ID, 7) != 0)
     return false;
 
   return true;
@@ -218,17 +223,17 @@ byte xPL::AnalyseHeaderLine(xPL_Message* xPLMessage, char* buffer, byte line)
 
     case XPL_MESSAGE_TYPE_IDENTIFIER: //message type identifier
 
-		if (memcmp(buffer,"xpl-",4)==0) //xpl
+		if (memcmp_P(buffer,PSTR("xpl-"),4)==0) //xpl
 		{
-			if (memcmp(buffer+4,"cmnd",4)==0) //type commande
+			if (memcmp_P(buffer+4,PSTR("cmnd"),4)==0) //type commande
 			{
 				xPLMessage->type=XPL_CMND;  //xpl-cmnd
 			}
-			else if (memcmp(buffer+4,"stat",4)==0) //type statut
+			else if (memcmp_P(buffer+4,PSTR("stat"),4)==0) //type statut
 			{
 				xPLMessage->type=XPL_STAT;  //xpl-stat
 			}
-			else if (memcmp(buffer+4,"trig",4)==0) //type trigger
+			else if (memcmp_P(buffer+4,PSTR("trig"),4)==0) //type trigger
 			{
 				xPLMessage->type=XPL_TRIG;  //xpl-trig
 			}
@@ -253,7 +258,7 @@ byte xPL::AnalyseHeaderLine(xPL_Message* xPLMessage, char* buffer, byte line)
         break;
 
     case XPL_HOP_COUNT: //hop
-        if (sscanf(buffer, "hop=%d", &xPLMessage->hop))
+        if (sscanf_P(buffer, PSTR("hop=%d"), &xPLMessage->hop))
         {
             return 3;
         }
@@ -264,7 +269,7 @@ byte xPL::AnalyseHeaderLine(xPL_Message* xPLMessage, char* buffer, byte line)
         break;
 
     case XPL_SOURCE: //source
-        if (sscanf(buffer, "source=%[^-]-%[^'.'].%s", &xPLMessage->source.vendor_id, &xPLMessage->source.device_id, &xPLMessage->source.instance_id) == 3)
+        if (sscanf_P(buffer, PSTR("source=%[^-]-%[^'.'].%s"), &xPLMessage->source.vendor_id, &xPLMessage->source.device_id, &xPLMessage->source.instance_id) == 3)
         {
           return 4;
         }
@@ -276,7 +281,7 @@ byte xPL::AnalyseHeaderLine(xPL_Message* xPLMessage, char* buffer, byte line)
 
     case XPL_TARGET: //target
 
-        if (sscanf(buffer, "target=%[^-]-%[^'.'].%s", &xPLMessage->target.vendor_id, &xPLMessage->target.device_id, &xPLMessage->target.instance_id) == 3)
+        if (sscanf_P(buffer, PSTR("target=%[^-]-%[^'.'].%s"), &xPLMessage->target.vendor_id, &xPLMessage->target.device_id, &xPLMessage->target.instance_id) == 3)
         {
           return 5;
         }
@@ -308,7 +313,7 @@ byte xPL::AnalyseHeaderLine(xPL_Message* xPLMessage, char* buffer, byte line)
     case XPL_SCHEMA_IDENTIFIER: //schema
 
         // xpl_header.schema=parse_schema_id(buffer);
-        sscanf(buffer, "%[^'.'].%s", &xPLMessage->schema.class_id, &xPLMessage->schema.type_id);
+        sscanf_P(buffer, PSTR("%[^'.'].%s"), &xPLMessage->schema.class_id, &xPLMessage->schema.type_id);
         return 7;
 
         break;
@@ -338,7 +343,7 @@ byte xPL::AnalyseCommandLine(xPL_Message * xPLMessage,char *buffer, byte command
     else	// parse the next command
     {
     	struct_command newcmd;
-        sscanf(buffer, "%[^'=']=%s", &newcmd.name, &newcmd.value);
+        sscanf_P(buffer, PSTR("%[^'=']=%s"), &newcmd.name, &newcmd.value);
 
         xPLMessage->AddCommand(newcmd.name, newcmd.value);
 
