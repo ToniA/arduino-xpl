@@ -49,7 +49,7 @@ void AfterParseAction(xPL_Message * message)
 {
     if (xpl.TargetIsMe(message))
     {
-      if (message->IsSchema(PSTR("lighting"), PSTR("basic")))
+      if (message->IsSchema_P(PSTR("lighting"), PSTR("basic")))
       {
         Serial.println(PSTR("is lighting.basic"));  
       }
@@ -68,7 +68,7 @@ void setup()
 
   xpl.SendExternal = &SendUdPMessage;  // pointer to the send callback
   xpl.AfterParseAction = &AfterParseAction;  // pointer to a post parsing action callback 
-  xpl.Begin(PSTR("xpl"), PSTR("arduino"), PSTR("test")); // parameters for hearbeat message
+  xpl.SetSource_P(PSTR("xpl"), PSTR("arduino"), PSTR("test")); // parameters for hearbeat message
 }
 
 void loop()

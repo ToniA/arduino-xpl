@@ -70,29 +70,46 @@ xPL::~xPL()
 {
 }
 
-void xPL::Begin(const PROGMEM char * _vendorId, const PROGMEM char * _deviceId, const PROGMEM char * _instanceId)
+/// Set the source of outgoing xPL messages
+void xPL::SetSource_P(const PROGMEM char * _vendorId, const PROGMEM char * _deviceId, const PROGMEM char * _instanceId)
 {
 	memcpy_P(source.vendor_id, _vendorId, XPL_VENDOR_ID_MAX);
 	memcpy_P(source.device_id, _deviceId, XPL_DEVICE_ID_MAX);
 	memcpy_P(source.instance_id, _instanceId, XPL_INSTANCE_ID_MAX);
 }
 
-void xPL::SendMessage(char *buffer)
+/**
+ * \brief       Send an xPL message
+ * \details   There is no validation of the message, it is sent as is.
+ * \param    buffer         buffer containing the xPL message.
+ */
+void xPL::SendMessage(char *_buffer)
 {
-	(*SendExternal)(buffer);
+	(*SendExternal)(_buffer);
 }
 
-void xPL::SendMessage(xPL_Message *message, bool _useDefaultSource)
+/**
+ * \brief       Send an xPL message
+ * \details   There is no validation of the message, it is sent as is.
+ * \param    message         			An xPL message.
+ * \param    _useDefaultSource	if true, insert the default source (defined in SetSource) on the message.
+ */
+void xPL::SendMessage(xPL_Message *_message, bool _useDefaultSource)
 {
 	if(_useDefaultSource)
 	{
-		message->SetSource(source.vendor_id, source.device_id, source.instance_id);
+		_message->SetSource(source.vendor_id, source.device_id, source.instance_id);
 	}
 	
-    SendMessage(message->toString());
+    SendMessage(_message->toString());
 }
 
 #ifdef ENABLE_PARSING
+
+/**
+ * \brief       xPL Stuff
+ * \details   Send heartbeat messages at "hbeat_interval" interval
+ */
 void xPL::Process()
 {
 	static bool bFirstRun = true;
@@ -106,39 +123,53 @@ void xPL::Process()
 	}
 }
 
-void xPL::ParseInputMessage(char* buffer)
+/**
+ * \brief       Parse an ingoing xPL message
+ * \details   Parse a message, check for hearbeat request and call user defined callback for post processing.
+ * \param    buffer         buffer of the ingoing UDP Packet
+ */
+void xPL::ParseInputMessage(char* _buffer)
 {
 	xPL_Message* xPLMessage = new xPL_Message();
-	Parse(xPLMessage, buffer);
+	Parse(xPLMessage, _buffer);
 
-	// check if the message is an hbeat.request
+	// check if the message is an hbeat.request to send a heartbeat
 	if (CheckHBeatRequest(xPLMessage))
 	{
 		SendHBeat();
 	}
 
+	// call the user defined callback to execute an action
 	if(AfterParseAction != NULL)
 	{
-	  (*AfterParseAction)(xPLMessage);  // call user function to execute action under the class
+	  (*AfterParseAction)(xPLMessage);
 	}
 
 	delete xPLMessage;
 }
 
-bool xPL::TargetIsMe(xPL_Message * message)
+/**
+ * \brief       Check the xPL message target
+ * \details   Check if the xPL message is for us
+ * \param    _message         an xPL message
+ */
+bool xPL::TargetIsMe(xPL_Message * _message)
 {
-  if (memcmp(message->target.vendor_id, source.vendor_id, XPL_VENDOR_ID_MAX) != 0)
+  if (memcmp(_message->target.vendor_id, source.vendor_id, strlen(source.vendor_id)) != 0)
     return false;
 
-  if (memcmp(message->target.device_id, source.device_id, XPL_DEVICE_ID_MAX) != 0)
+  if (memcmp(_message->target.device_id, source.device_id, strlen(source.device_id)) != 0)
     return false;
 
-  if (memcmp(message->target.instance_id, source.instance_id, XPL_INSTANCE_ID_MAX) != 0)
+  if (memcmp(_message->target.instance_id, source.instance_id, strlen(source.instance_id)) != 0)
     return false;
 
   return true;
 }
 
+/**
+ * \brief       Send a heartbeat message
+  */
 void xPL::SendHBeat()
 {
   last_heartbeat = millis();
@@ -150,198 +181,218 @@ void xPL::SendHBeat()
   SendMessage(buffer);
 }
 
-bool xPL::CheckHBeatRequest(xPL_Message* xPLMessage)
+/**
+ * \brief       Check if the message is a heartbeat request
+  * \param    _message         an xPL message
+ */
+inline bool xPL::CheckHBeatRequest(xPL_Message* _message)
 {
-  if (!TargetIsMe(xPLMessage))
+  if (!TargetIsMe(_message))
     return false;
 
-  return xPLMessage->IsSchema(XPL_HBEAT_REQUEST_CLASS_ID, XPL_HBEAT_REQUEST_TYPE_ID);
+  return _message->IsSchema(XPL_HBEAT_REQUEST_CLASS_ID, XPL_HBEAT_REQUEST_TYPE_ID);
 }
 
-void xPL::Parse(xPL_Message* xPLMessage, char* message)
+/**
+ * \brief       Parse a buffer and generate a xPL_Message
+ * \details	  Line based xPL parser
+ * \param    _xPLMessage    the result xPL message
+ * \param    _message         the buffer
+ */
+void xPL::Parse(xPL_Message* _xPLMessage, char* _buffer)
 {
-    int len = strlen(message);
+    int len = strlen(_buffer);
 
     byte j=0;
     byte line=0;
     int result=0;
-    char buffer[XPL_LINE_MESSAGE_BUFFER_MAX] = "\0";
+    char lineBuffer[XPL_LINE_MESSAGE_BUFFER_MAX] = "\0";
 
     // read each character of the message
-    for(byte i=0; i<len; i++)
+    for(byte i = 0; i < len; i++)
     {
         // load byte by byte in 'line' buffer, until '\n' is detected
-        if(message[i]==XPL_END_OF_LINE) // is it a linefeed (ASCII: 10 decimal)
+        if(_buffer[i] == XPL_END_OF_LINE) // is it a linefeed (ASCII: 10 decimal)
         {
             ++line;
-            buffer[j]='\0';	// add the end of string id
+            lineBuffer[j]='\0';	// add the end of string id
 
-            if(line<=XPL_OPEN_SCHEMA)
+            if(line <= XPL_OPEN_SCHEMA)
             {
                 // first part: header and schema determination
-                result=AnalyseHeaderLine(xPLMessage, buffer ,line); // we analyse the line, function of the line number inthe xpl message
-            };
+            	// we analyse the line, function of the line number in the xpl message
+                result = AnalyseHeaderLine(_xPLMessage, lineBuffer ,line);
+            }
 
-            if(line>XPL_OPEN_SCHEMA)
+            if(line > XPL_OPEN_SCHEMA)
             {
                 // second part: command line
-                result=AnalyseCommandLine(xPLMessage, buffer, line-9); // we analyse the specific command line, function of the line number in the xpl message
+            	// we analyse the specific command line, function of the line number in the xpl message
+                result = AnalyseCommandLine(_xPLMessage, lineBuffer, line-9);
 
-                if(result==xPLMessage->command_count+1)
-                {
+                if(result == _xPLMessage->command_count+1)
                     break;
-                };
+            }
 
-            };
+            if (result < 0) break;
 
-            if (result < 0)
-            {
-                break;
-            };
-
-            j=0; // reset the buffer pointer
-            clearStr(buffer); // clear the buffer
+            j = 0; // reset the buffer pointer
+            clearStr(lineBuffer); // clear the buffer
         }
         else
         {
             // next character
-            buffer[j++]=message[i];
+        	lineBuffer[j++] = _buffer[i];
         }
     }
 }
 
-byte xPL::AnalyseHeaderLine(xPL_Message* xPLMessage, char* buffer, byte line)
+/**
+ * \brief       Parse the header part of the xPL message line by line
+ * \param    _xPLMessage    the result xPL message
+ * \param    _buffer         	   the line to parse
+ * \param    _line         	       the line number
+ */
+byte xPL::AnalyseHeaderLine(xPL_Message* _xPLMessage, char* _buffer, byte _line)
 {
-    switch (line)
+    switch (_line)
     {
+		case XPL_MESSAGE_TYPE_IDENTIFIER: //message type identifier
 
-    case XPL_MESSAGE_TYPE_IDENTIFIER: //message type identifier
-
-		if (memcmp_P(buffer,PSTR("xpl-"),4)==0) //xpl
-		{
-			if (memcmp_P(buffer+4,PSTR("cmnd"),4)==0) //type commande
+			if (memcmp_P(_buffer,PSTR("xpl-"),4)==0) //xpl
 			{
-				xPLMessage->type=XPL_CMND;  //xpl-cmnd
+				if (memcmp_P(_buffer+4,PSTR("cmnd"),4)==0) //command type
+				{
+					_xPLMessage->type=XPL_CMND;  //xpl-cmnd
+				}
+				else if (memcmp_P(_buffer+4,PSTR("stat"),4)==0) //statut type
+				{
+					_xPLMessage->type=XPL_STAT;  //xpl-stat
+				}
+				else if (memcmp_P(_buffer+4,PSTR("trig"),4)==0) // trigger type
+				{
+					_xPLMessage->type=XPL_TRIG;  //xpl-trig
+				}
 			}
-			else if (memcmp_P(buffer+4,PSTR("stat"),4)==0) //type statut
+			else
 			{
-				xPLMessage->type=XPL_STAT;  //xpl-stat
+				return 0;  //unknown message
 			}
-			else if (memcmp_P(buffer+4,PSTR("trig"),4)==0) //type trigger
+
+			return 1;
+
+			break;
+
+		case XPL_OPEN_HEADER: //header begin
+
+			if (memcmp(_buffer,"{",1)==0)
 			{
-				xPLMessage->type=XPL_TRIG;  //xpl-trig
+				return 2;
 			}
-		}
-        else
-        {
-            return 0;  //unknown message
-        }
-        return 1;
-        break;
+			else
+			{
+				return -2;
+			}
 
-    case XPL_OPEN_HEADER: //header begin
+			break;
 
-        if (memcmp(buffer,"{",1)==0)
-        {
-            return 2;
-        }
-        else
-                {
-                    return -2;
-                }
-        break;
+		case XPL_HOP_COUNT: //hop
+			if (sscanf_P(_buffer, PSTR("hop=%d"), &_xPLMessage->hop))
+			{
+				return 3;
+			}
+			else
+			{
+				return -3;
+			}
 
-    case XPL_HOP_COUNT: //hop
-        if (sscanf_P(buffer, PSTR("hop=%d"), &xPLMessage->hop))
-        {
-            return 3;
-        }
-        else
-                {
-                    return -3;
-                }
-        break;
+			break;
 
-    case XPL_SOURCE: //source
-        if (sscanf_P(buffer, PSTR("source=%[^-]-%[^'.'].%s"), &xPLMessage->source.vendor_id, &xPLMessage->source.device_id, &xPLMessage->source.instance_id) == 3)
-        {
-          return 4;
-        }
-        else
-                {
-                  return -4;
-                }
-        break;
+		case XPL_SOURCE: //source
+			if (sscanf_P(_buffer, PSTR("source=%[^-]-%[^'.'].%s"), &_xPLMessage->source.vendor_id, &_xPLMessage->source.device_id, &_xPLMessage->source.instance_id) == 3)
+			{
+			  return 4;
+			}
+			else
+			{
+			  return -4;
+			}
 
-    case XPL_TARGET: //target
+			break;
 
-        if (sscanf_P(buffer, PSTR("target=%[^-]-%[^'.'].%s"), &xPLMessage->target.vendor_id, &xPLMessage->target.device_id, &xPLMessage->target.instance_id) == 3)
-        {
-          return 5;
-        }
-        else
-        {
-          if(memcmp(xPLMessage->target.vendor_id,"*", 1) == 0)  // check if broadcast message
-          {
-            return 5;
-          }
-          else
-          {
-        	  return -5;
-          }
-        }
-        break;
+		case XPL_TARGET: //target
 
-    case XPL_CLOSE_HEADER: //header end
-        if (memcmp(buffer,"}",1)==0)
-        {
-            return 6;
-        }
-        else
-                {
-                    // Serial.print(" -> Header end not found");
-                    return -6;
-                }
-        break;
+			if (sscanf_P(_buffer, PSTR("target=%[^-]-%[^'.'].%s"), &_xPLMessage->target.vendor_id, &_xPLMessage->target.device_id, &_xPLMessage->target.instance_id) == 3)
+			{
+			  return 5;
+			}
+			else
+			{
+			  if(memcmp(_xPLMessage->target.vendor_id,"*", 1) == 0)  // check if broadcast message
+			  {
+				  return 5;
+			  }
+			  else
+			  {
+				  return -5;
+			  }
+			}
+			break;
 
-    case XPL_SCHEMA_IDENTIFIER: //schema
+		case XPL_CLOSE_HEADER: //header end
+			if (memcmp(_buffer,"}",1)==0)
+			{
+				return 6;
+			}
+			else
+			{
+				return -6;
+			}
 
-        // xpl_header.schema=parse_schema_id(buffer);
-        sscanf_P(buffer, PSTR("%[^'.'].%s"), &xPLMessage->schema.class_id, &xPLMessage->schema.type_id);
-        return 7;
+			break;
 
-        break;
+		case XPL_SCHEMA_IDENTIFIER: //schema
+			sscanf_P(_buffer, PSTR("%[^'.'].%s"), &_xPLMessage->schema.class_id, &_xPLMessage->schema.type_id);
+			return 7;
 
-    case XPL_OPEN_SCHEMA: //header begin
-        if (memcmp(buffer,"{",1)==0)
-        {
-            return 8;
-        }
-        else
-                {
-                    // Serial.print(" -> Header begin not found");
-                    return -8;
-                }
-        break;
+			break;
+
+		case XPL_OPEN_SCHEMA: //header begin
+			if (memcmp(_buffer,"{",1)==0)
+			{
+				return 8;
+			}
+			else
+			{
+				return -8;
+			}
+
+			break;
     }
 
     return -100;
 }
 
-byte xPL::AnalyseCommandLine(xPL_Message * xPLMessage,char *buffer, byte command_line)
+/**
+ * \brief       Parse the body part of the xPL message line by line
+ * \param    _xPLMessage    				   the result xPL message
+ * \param    _buffer         	  				   the line to parse
+ * \param    _command_line       	       the line number
+ */
+byte xPL::AnalyseCommandLine(xPL_Message * _xPLMessage, char *_buffer, byte _command_line)
 {
-    if (memcmp(buffer,"}",1)==0) // End of schema
+    if (memcmp(_buffer,"}",1) == 0) // End of schema
     {
-        return xPLMessage->command_count+1;
+        return _xPLMessage->command_count+1;
     }
     else	// parse the next command
     {
     	struct_command newcmd;
-        sscanf_P(buffer, PSTR("%[^'=']=%s"), &newcmd.name, &newcmd.value);
+        sscanf_P(_buffer, PSTR("%[^'=']=%s"), &newcmd.name, &newcmd.value);
 
-        xPLMessage->AddCommand(newcmd.name, newcmd.value);
+        _xPLMessage->AddCommand(newcmd.name, newcmd.value);
 
-        return command_line;
+        return _command_line;
     }
 }
 #endif

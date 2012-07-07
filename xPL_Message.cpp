@@ -48,20 +48,20 @@ void xPL_Message::SetSource(char * _vendorId, char * _deviceId, char * _instance
 	memcpy(source.instance_id, _instanceId, XPL_INSTANCE_ID_MAX);
 }
 
-void xPL_Message::SetTarget(const PROGMEM char * _vendorId, const PROGMEM char * _deviceId, const PROGMEM char * _instanceId)
+void xPL_Message::SetTarget_P(const PROGMEM char * _vendorId, const PROGMEM char * _deviceId, const PROGMEM char * _instanceId)
 {
 	memcpy_P(target.vendor_id, _vendorId, XPL_VENDOR_ID_MAX);
 	if(_deviceId != NULL) memcpy_P(target.device_id, _deviceId, XPL_DEVICE_ID_MAX);
 	if(_instanceId != NULL) memcpy_P(target.instance_id, _instanceId, XPL_INSTANCE_ID_MAX);
 }
 
-void xPL_Message::SetSchema(const PROGMEM char * _classId, const PROGMEM char * _typeId)
+void xPL_Message::SetSchema_P(const PROGMEM char * _classId, const PROGMEM char * _typeId)
 {
 	memcpy_P(schema.class_id, _classId, 8);
 	memcpy_P(schema.type_id, _typeId, 8);
 }
 
-inline bool xPL_Message::CreateCommand()
+bool xPL_Message::CreateCommand()
 {
 	// Maximun command reach
 	// To avoid oom, we arbitrary accept only XPL_MESSAGE_COMMAND_MAX command
@@ -71,24 +71,13 @@ inline bool xPL_Message::CreateCommand()
 	command = (struct_command*)realloc ( command, (++command_count) * sizeof(struct_command) );
 }
 
-inline void xPL_Message::SetCommand(struct_command* newcmd, const PROGMEM char * _name, const PROGMEM char * _value)
-{
-	memcpy_P(newcmd->name, _name, 16);
-	memcpy_P(newcmd->value, _value, 128);
-}
-
-inline void xPL_Message::SetCommand(struct_command* newcmd, char * _name, char * _value)
-{
-	memcpy(newcmd->name, _name, 16);
-	memcpy(newcmd->value, _value, 128);
-}
-
-bool xPL_Message::AddCommand(const PROGMEM char* _name, const PROGMEM char* _value)
+bool xPL_Message::AddCommand_P(const PROGMEM char* _name, const PROGMEM char* _value)
 {
 	if(!CreateCommand()) return false;
-	
+
 	struct_command newcmd;
-	SetCommand(&newcmd, _name, _value);
+	memcpy_P(newcmd.name, _name, 16);
+	memcpy_P(newcmd.value, _value, 128);
 	command[command_count-1] = newcmd;
 	return true;
 }
@@ -98,7 +87,8 @@ bool xPL_Message::AddCommand(char* _name, char* _value)
 	if(!CreateCommand()) return false;
 
 	struct_command newcmd;
-	SetCommand(&newcmd, _name, _value);
+	memcpy(newcmd.name, _name, 16);
+	memcpy(newcmd.value, _value, 128);
 	command[command_count-1] = newcmd;
 	return true;
 }
@@ -148,16 +138,26 @@ char *xPL_Message::toString()
 
 bool xPL_Message::IsSchema(char* _classId, char* _typeId)
 {
-//  const char *classId = (const char PROGMEM *)_classId;
-//  const char *typeId = (const char PROGMEM *)_typeId;
-
-  if (memcmp(schema.class_id, _classId, strlen(class_id)) == 0)
+  if (memcmp(schema.class_id, _classId, 8) == 0)
   {
-    if (memcmp(schema.type_id, _typeId, strlen(type_id)) == 0)
+    if (memcmp(schema.type_id, _typeId, 8) == 0)
     {
       return true;
     }   
   }  
 
   return false;
+}
+
+bool xPL_Message::IsSchema_P(const PROGMEM char* _classId, const PROGMEM char* _typeId)
+{
+	if (memcmp_P(schema.class_id, _classId, 8) == 0)
+	  {
+	    if (memcmp_P(schema.type_id, _typeId, 8) == 0)
+	    {
+	      return true;
+	    }
+	  }
+
+	  return false;
 }

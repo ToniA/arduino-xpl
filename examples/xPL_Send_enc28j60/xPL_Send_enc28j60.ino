@@ -55,11 +55,12 @@ void setup()
   ether.staticSetup(myip, gwip);
  
   xpl.SendExternal = &SendUdPMessage;  // pointer to the send callback
-  xpl.Begin(PSTR("xpl"), PSTR("arduino"), PSTR("test")); // parameters for hearbeat message
+  xpl.SetSource_P(PSTR("xpl"), PSTR("arduino"), PSTR("test")); // parameters for hearbeat message
 }
 
 void loop()
 {
+
    // Example of sending an xPL Message every 10 second
    if ((millis()-timer) >= 10000)
    {
@@ -68,13 +69,13 @@ void loop()
      msg.hop = 1;
      msg.type = XPL_TRIG;
 
-     msg.SetTarget(PSTR("*"));
-     msg.SetSchema(PSTR("sensor"), PSTR("basic"));
+     msg.SetTarget_P(PSTR("*"));
+     msg.SetSchema_P(PSTR("sensor"), PSTR("basic"));
 
-     msg.AddCommand(PSTR("device"),PSTR("1"));
-     msg.AddCommand(PSTR("type"),PSTR("temp"));
-     msg.AddCommand(PSTR("current"),PSTR("22"));
-
+     msg.AddCommand_P(PSTR("device"),PSTR("1"));
+     msg.AddCommand_P(PSTR("type"),PSTR("temp"));
+     msg.AddCommand_P(PSTR("current"),PSTR("22"));
+    
      xpl.SendMessage(&msg);
      
      timer = millis();
