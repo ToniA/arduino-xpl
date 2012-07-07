@@ -41,6 +41,12 @@ xPL_Message::~xPL_Message()
 	}
 }
 
+/**
+ * \brief       Set source of the message (optional)
+ * \param    _vendorId         vendor id.
+ * \param    _deviceId         device id.
+ * \param    _instanceId      instance id.
+ */
 void xPL_Message::SetSource(char * _vendorId, char * _deviceId, char * _instanceId)
 {
 	memcpy(source.vendor_id, _vendorId, XPL_VENDOR_ID_MAX);
@@ -48,6 +54,13 @@ void xPL_Message::SetSource(char * _vendorId, char * _deviceId, char * _instance
 	memcpy(source.instance_id, _instanceId, XPL_INSTANCE_ID_MAX);
 }
 
+/**
+ * \brief       Set Target of the message
+ * \details	  insert "*" into _vendorId to broadcast the message
+ * \param    _vendorId         vendor id.
+ * \param    _deviceId         device id.		(optional)
+ * \param    _instanceId      instance id.    (optional)
+ */
 void xPL_Message::SetTarget_P(const PROGMEM char * _vendorId, const PROGMEM char * _deviceId, const PROGMEM char * _instanceId)
 {
 	memcpy_P(target.vendor_id, _vendorId, XPL_VENDOR_ID_MAX);
@@ -55,12 +68,21 @@ void xPL_Message::SetTarget_P(const PROGMEM char * _vendorId, const PROGMEM char
 	if(_instanceId != NULL) memcpy_P(target.instance_id, _instanceId, XPL_INSTANCE_ID_MAX);
 }
 
+/**
+ * \brief       Set Schema of the message
+  * \param   _classId       Class
+ * \param    _typeId         Type
+  */
 void xPL_Message::SetSchema_P(const PROGMEM char * _classId, const PROGMEM char * _typeId)
 {
 	memcpy_P(schema.class_id, _classId, 8);
 	memcpy_P(schema.type_id, _typeId, 8);
 }
 
+/**
+ * \brief       Create a new command/value pair
+ * \details	  Check if maximun command is reach and add memory to command array
+ */
 bool xPL_Message::CreateCommand()
 {
 	// Maximun command reach
@@ -71,6 +93,12 @@ bool xPL_Message::CreateCommand()
 	command = (struct_command*)realloc ( command, (++command_count) * sizeof(struct_command) );
 }
 
+/**
+ * \brief       Add a command to the message's body
+ * \details	  PROGMEM Version
+ * \param    _name         name of the command
+ * \param    _value         value of the command
+ */
 bool xPL_Message::AddCommand_P(const PROGMEM char* _name, const PROGMEM char* _value)
 {
 	if(!CreateCommand()) return false;
@@ -82,6 +110,12 @@ bool xPL_Message::AddCommand_P(const PROGMEM char* _name, const PROGMEM char* _v
 	return true;
 }
 
+/**
+ * \brief       Add a command to the message's body
+ * \details	  char* Version
+ * \param    _name         name of the command
+ * \param    _value         value of the command
+ */
 bool xPL_Message::AddCommand(char* _name, char* _value)
 {
 	if(!CreateCommand()) return false;
@@ -93,7 +127,10 @@ bool xPL_Message::AddCommand(char* _name, char* _value)
 	return true;
 }
 
-char *xPL_Message::toString()
+/**
+ * \brief       Convert xPL_Message to char* buffer
+ */
+char* xPL_Message::toString()
 {
   char message_buffer[XPL_MESSAGE_BUFFER_MAX];
   int pos;
@@ -149,6 +186,11 @@ bool xPL_Message::IsSchema(char* _classId, char* _typeId)
   return false;
 }
 
+/**
+ * \brief       Check the message's schema
+  * \param   _classId        class
+ * \param    _typeId         type
+ */
 bool xPL_Message::IsSchema_P(const PROGMEM char* _classId, const PROGMEM char* _typeId)
 {
 	if (memcmp_P(schema.class_id, _classId, 8) == 0)
