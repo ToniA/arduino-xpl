@@ -131,18 +131,19 @@ void xPL::Process()
 void xPL::ParseInputMessage(char* _buffer)
 {
 	xPL_Message* xPLMessage = new xPL_Message();
-	Parse(xPLMessage, _buffer);
-
-	// check if the message is an hbeat.request to send a heartbeat
-	if (CheckHBeatRequest(xPLMessage))
+	if(Parse(xPLMessage, _buffer))
 	{
-		SendHBeat();
-	}
+		// check if the message is an hbeat.request to send a heartbeat
+		if (CheckHBeatRequest(xPLMessage))
+		{
+			SendHBeat();
+		}
 
-	// call the user defined callback to execute an action
-	if(AfterParseAction != NULL)
-	{
-	  (*AfterParseAction)(xPLMessage);
+		// call the user defined callback to execute an action
+		if(AfterParseAction != NULL)
+		{
+		  (*AfterParseAction)(xPLMessage);
+		}
 	}
 
 	delete xPLMessage;
@@ -199,13 +200,13 @@ inline bool xPL::CheckHBeatRequest(xPL_Message* _message)
  * \param    _xPLMessage    the result xPL message
  * \param    _message         the buffer
  */
-void xPL::Parse(xPL_Message* _xPLMessage, char* _buffer)
+bool xPL::Parse(xPL_Message* _xPLMessage, char* _buffer)
 {
     int len = strlen(_buffer);
 
     byte j=0;
     byte line=0;
-    int result=0;
+    byte result=0;
     char lineBuffer[XPL_LINE_MESSAGE_BUFFER_MAX] = "\0";
 
     // read each character of the message
@@ -223,18 +224,17 @@ void xPL::Parse(xPL_Message* _xPLMessage, char* _buffer)
             	// we analyse the line, function of the line number in the xpl message
                 result = AnalyseHeaderLine(_xPLMessage, lineBuffer ,line);
             }
-
-            if(line > XPL_OPEN_SCHEMA)
+            else
             {
                 // second part: command line
             	// we analyse the specific command line, function of the line number in the xpl message
-                result = AnalyseCommandLine(_xPLMessage, lineBuffer, line-9);
+                result = AnalyseCommandLine(_xPLMessage, lineBuffer);
 
-                if(result == _xPLMessage->command_count+1)
-                    break;
+                if(result == _xPLMessage->command_count + 9)
+                    return true;
             }
 
-            if (result < 0) break;
+            if (result != 0) return false;
 
             j = 0; // reset the buffer pointer
             clearStr(lineBuffer); // clear the buffer
@@ -264,113 +264,72 @@ byte xPL::AnalyseHeaderLine(xPL_Message* _xPLMessage, char* _buffer, byte _line)
 				if (memcmp_P(_buffer+4,PSTR("cmnd"),4)==0) //command type
 				{
 					_xPLMessage->type=XPL_CMND;  //xpl-cmnd
+					return 0;
 				}
 				else if (memcmp_P(_buffer+4,PSTR("stat"),4)==0) //statut type
 				{
 					_xPLMessage->type=XPL_STAT;  //xpl-stat
+					return 0;
 				}
 				else if (memcmp_P(_buffer+4,PSTR("trig"),4)==0) // trigger type
 				{
 					_xPLMessage->type=XPL_TRIG;  //xpl-trig
+					return 0;
 				}
 			}
 			else
-			{
-				return 0;  //unknown message
-			}
-
-			return 1;
+				return 0;
 
 			break;
 
 		case XPL_OPEN_HEADER: //header begin
 
 			if (memcmp(_buffer,"{",1)==0)
-			{
-				return 2;
-			}
-			else
-			{
-				return -2;
-			}
+				return 0;
 
 			break;
 
 		case XPL_HOP_COUNT: //hop
 			if (sscanf_P(_buffer, PSTR("hop=%d"), &_xPLMessage->hop))
-			{
-				return 3;
-			}
-			else
-			{
-				return -3;
-			}
+				return 0;
 
 			break;
 
 		case XPL_SOURCE: //source
 			if (sscanf_P(_buffer, PSTR("source=%[^-]-%[^'.'].%s"), &_xPLMessage->source.vendor_id, &_xPLMessage->source.device_id, &_xPLMessage->source.instance_id) == 3)
-			{
-			  return 4;
-			}
-			else
-			{
-			  return -4;
-			}
+				return 0;
 
 			break;
 
 		case XPL_TARGET: //target
 
 			if (sscanf_P(_buffer, PSTR("target=%[^-]-%[^'.'].%s"), &_xPLMessage->target.vendor_id, &_xPLMessage->target.device_id, &_xPLMessage->target.instance_id) == 3)
-			{
-			  return 5;
-			}
-			else
-			{
-			  if(memcmp(_xPLMessage->target.vendor_id,"*", 1) == 0)  // check if broadcast message
-			  {
-				  return 5;
-			  }
-			  else
-			  {
-				  return -5;
-			  }
-			}
+				return 0;
+			else if(memcmp(_xPLMessage->target.vendor_id,"*", 1) == 0)  // check if broadcast message
+				return 0;
+		
 			break;
 
 		case XPL_CLOSE_HEADER: //header end
-			if (memcmp(_buffer,"}",1)==0)
-			{
-				return 6;
-			}
-			else
-			{
-				return -6;
-			}
-
+			if (memcmp(_buffer,"}",1) == 0)
+				return 0;
+			
 			break;
 
 		case XPL_SCHEMA_IDENTIFIER: //schema
-			sscanf_P(_buffer, PSTR("%[^'.'].%s"), &_xPLMessage->schema.class_id, &_xPLMessage->schema.type_id);
-			return 7;
+			if(sscanf_P(_buffer, PSTR("%[^'.'].%s"), &_xPLMessage->schema.class_id, &_xPLMessage->schema.type_id) == 2);
+				return 0;
 
 			break;
 
 		case XPL_OPEN_SCHEMA: //header begin
-			if (memcmp(_buffer,"{",1)==0)
-			{
-				return 8;
-			}
-			else
-			{
-				return -8;
-			}
+			if (memcmp(_buffer,"{",1) == 0)
+				return 0;
 
 			break;
     }
 
-    return -100;
+    return _line;
 }
 
 /**
@@ -379,11 +338,11 @@ byte xPL::AnalyseHeaderLine(xPL_Message* _xPLMessage, char* _buffer, byte _line)
  * \param    _buffer         	  				   the line to parse
  * \param    _command_line       	       the line number
  */
-byte xPL::AnalyseCommandLine(xPL_Message * _xPLMessage, char *_buffer, byte _command_line)
+byte xPL::AnalyseCommandLine(xPL_Message * _xPLMessage, char *_buffer)
 {
     if (memcmp(_buffer,"}",1) == 0) // End of schema
     {
-        return _xPLMessage->command_count+1;
+        return _xPLMessage->command_count + 9; // line no = nbcommand + 8 lines + end line
     }
     else	// parse the next command
     {
@@ -392,7 +351,7 @@ byte xPL::AnalyseCommandLine(xPL_Message * _xPLMessage, char *_buffer, byte _com
 
         _xPLMessage->AddCommand(newcmd.name, newcmd.value);
 
-        return _command_line;
+        return _xPLMessage->command_count + 8; // line no = nbcommand + 8 lines
     }
 }
 #endif
