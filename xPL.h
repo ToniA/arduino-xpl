@@ -90,7 +90,7 @@ class xPL
 
 	bool Parse(xPL_Message *, char *);
 	byte AnalyseHeaderLine(xPL_Message *, char *, byte );
-    byte AnalyseCommandLine(xPL_Message *, char *, byte );
+    byte AnalyseCommandLine(xPL_Message *, char * );
 #endif
 };
 

@@ -222,7 +222,8 @@ bool xPL::Parse(xPL_Message* _xPLMessage, char* _buffer)
             {
                 // first part: header and schema determination
             	// we analyse the line, function of the line number in the xpl message
-                result = AnalyseHeaderLine(_xPLMessage, lineBuffer ,line);
+                if(AnalyseHeaderLine(_xPLMessage, lineBuffer ,line) != 0)
+                	return false;
             }
             else
             {
@@ -233,8 +234,6 @@ bool xPL::Parse(xPL_Message* _xPLMessage, char* _buffer)
                 if(result == _xPLMessage->command_count + 9)
                     return true;
             }
-
-            if (result != 0) return false;
 
             j = 0; // reset the buffer pointer
             clearStr(lineBuffer); // clear the buffer
