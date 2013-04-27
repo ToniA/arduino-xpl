@@ -35,7 +35,7 @@
 #define XPL_STAT 2
 #define XPL_TRIG 3
 
-#define XPL_MESSAGE_BUFFER_MAX           256
+#define XPL_MESSAGE_BUFFER_MAX           256  // going over 256 would mean changing index from byte to int
 #define XPL_MESSAGE_COMMAND_MAX          10
 
 class xPL_Message

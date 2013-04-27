@@ -31,10 +31,19 @@
 #include "Arduino.h"
 #include <string.h>
 
-#define XPL_VENDOR_ID_MAX 8
-#define XPL_DEVICE_ID_MAX 8
-#define XPL_INSTANCE_ID_MAX 18
+#define XPL_VENDOR_ID_MAX		8
+#define XPL_DEVICE_ID_MAX		8
+#define XPL_INSTANCE_ID_MAX		16
+#define	XPL_CLASS_ID_MAX		8
+#define	XPL_TYPE_ID_MAX			8
+#define XPL_NAME_LENGTH_MAX		16
+#define XPL_VALUE_LENGTH_MAX	32  // should be 128 but need to spare RAM
 
+#define	XPL_HOP_COUNT_PARSER	PSTR("hop=%d")
+#define	XPL_SOURCE_PARSER		PSTR("source=%8[^-]-%8[^'.'].%16s")
+#define	XPL_TARGET_PARSER		PSTR("target=%8[^-]-%8[^'.'].%16s")
+#define	XPL_SCHEMA_PARSER		PSTR("%8[^'.'].%8s")
+#define XPL_COMMAND_PARSER		PSTR("%16[^'=']=%32s")    // 32 shall match XPL_VALUE_LENGTH_MAX
 
 typedef struct struct_id struct_id;
 struct struct_id			// source or target
@@ -47,15 +56,15 @@ struct struct_id			// source or target
 typedef struct struct_xpl_schema struct_xpl_schema;
 struct struct_xpl_schema
 {
-    char class_id[8+1];	// class of schema (x10, alarm...)
-    char type_id[8+1];	// type of schema (basic...)
+    char class_id[XPL_CLASS_ID_MAX+1];	// class of schema (x10, alarm...)
+    char type_id[XPL_TYPE_ID_MAX+1];	// type of schema (basic...)
 };
 
 typedef struct struct_command struct_command;
 struct struct_command			// source or target
 {
-    char name[16+1];		// vendor id
-    char value[128+1];		// device id
+    char name[XPL_NAME_LENGTH_MAX+1];		// vendor id
+    char value[XPL_VALUE_LENGTH_MAX+1];		// device id
 };
 
 void clearStr (char* str);

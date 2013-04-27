@@ -38,7 +38,7 @@
 #define XPL_STAT 2
 #define XPL_TRIG 3
 
-#define XPL_DEFAULT_HEARTBEAT_INTERVAL   5
+#define XPL_DEFAULT_HEARTBEAT_INTERVAL   15
 
 #define XPL_UDP_PORT 3865
 
@@ -88,9 +88,9 @@ class xPL
     void SendHBeat();
     bool CheckHBeatRequest(xPL_Message * message);
 
-	bool Parse(xPL_Message *, char *);
+	void Parse(xPL_Message *, char *);
 	byte AnalyseHeaderLine(xPL_Message *, char *, byte );
-    byte AnalyseCommandLine(xPL_Message *, char * );
+    byte AnalyseCommandLine(xPL_Message *, char *, byte, byte );
 #endif
 };
 
