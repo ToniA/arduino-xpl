@@ -25,6 +25,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
  
+#include <Ethernet.h> // for IPaddress
 #include "xPL.h"
 
 #define XPL_LINE_MESSAGE_BUFFER_MAX			128	// max length of a line			// maximum command in a xpl message
@@ -54,6 +55,7 @@
 xPL::xPL()
 {
   udp_port = XPL_UDP_PORT;
+  ip = IPAddress( 0, 0, 0, 0 );
   
   SendExternal = NULL;
 
@@ -177,7 +179,7 @@ void xPL::SendHBeat()
 
 //  sprintf_P(buffer, PSTR("xpl-stat\n{\nhop=1\nsource=%s-%s.%s\ntarget=*\n}\n%s.%s\n{\ninterval=%d\n}\n"), source.vendor_id, source.device_id, source.instance_id, XPL_HBEAT_ANSWER_CLASS_ID, XPL_HBEAT_ANSWER_TYPE_ID, hbeat_interval);
 
-  sprintf_P(buffer, PSTR("xpl-stat\n{\nhop=1\nsource=%s-%s.%s\ntarget=*\n}\n%s.%s\n{\ninterval=%d\nport=3865\nremote-ip=192.168.4.133\nversion=1.0\n}\n"), source.vendor_id, source.device_id, source.instance_id, XPL_HBEAT_ANSWER_CLASS_ID, XPL_HBEAT_ANSWER_TYPE_ID, hbeat_interval);
+  sprintf_P(buffer, PSTR("xpl-stat\n{\nhop=1\nsource=%s-%s.%s\ntarget=*\n}\n%s.%s\n{\ninterval=%d\nport=%d\nremote-ip=%d.%d.%d.%d\nversion=1.0\n}\n"), source.vendor_id, source.device_id, source.instance_id, XPL_HBEAT_ANSWER_CLASS_ID, XPL_HBEAT_ANSWER_TYPE_ID, hbeat_interval, udp_port, ip[0], ip[1], ip[2], ip[3]);
 
   //(*SendExternal)(buffer);
   SendMessage(buffer);

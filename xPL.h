@@ -60,6 +60,8 @@ class xPL
 	~xPL();
 
 	struct_id source;  // my source
+	
+	IPAddress ip;
 	unsigned short udp_port;    // default 3865
 
 	xPLSendExternal SendExternal;
